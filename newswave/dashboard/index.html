@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NewsWave</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--fg:#1b1f24;--mut:#66707a;--line:#dde1e6;--good:#0a7d3c;--bad:#c62828;--acc:#2356c9;--warn:#b26a00}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1216;--card:#181c22;--fg:#e6e9ed;--mut:#8b96a1;--line:#2a313a;--good:#3ecf74;--bad:#ff6b6b;--acc:#6b9bff;--warn:#f0b34a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:8px;padding:10px 16px;flex-wrap:wrap}
+h1{font-size:18px;margin:0 8px 0 0}
+main{padding:0 16px 24px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+@media (max-width:480px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0;overflow:auto}
+section.wide{grid-column:1/-1}
+h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
+.tiles{display:flex;gap:10px;flex-wrap:wrap}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:110px;flex:1}
+.tile b{display:block;font-size:20px}.tile span{color:var(--mut);font-size:11px;text-transform:uppercase}
+.pos{color:var(--good)}.neg{color:var(--bad)}.mut{color:var(--mut)}
+.badge,.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.ok{color:var(--good)}.killed{color:#fff;background:var(--bad);border-color:var(--bad)}
+.paper{color:var(--acc)}.observe{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+td.h{white-space:normal;max-width:360px}
+.bar{display:flex;align-items:center;gap:8px;margin:3px 0}
+.bar i{display:block;height:14px;background:var(--acc);border-radius:3px;min-width:2px}
+.bar .l{width:130px;color:var(--mut);font-size:12px;flex:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.grid div{border:1px solid var(--line);border-radius:6px;padding:6px 8px}.grid b{display:block;font-size:16px}.grid span{font-size:11px;color:var(--mut)}
+#log{height:260px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);border-radius:6px;padding:6px}
+#log div{white-space:pre-wrap}
+input{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+svg{width:100%;height:140px;display:block}svg polyline{fill:none;stroke:var(--acc);stroke-width:1.5;vector-effect:non-scaling-stroke}
+</style></head><body>
+<header><h1>NewsWave</h1><span id="ver" class="mut"></span><span id="mode" class="badge"></span><span id="kill" class="badge"></span><span id="upd" class="mut"></span></header>
+<main>
+<section class="wide"><div class="tiles" id="tiles"></div></section>
+<section><h2>Open positions</h2><div id="pos"></div></section>
+<section><h2>News today</h2><div class="tiles" id="news"></div></section>
+<section class="wide"><h2>Armed setups</h2><div id="setups"></div></section>
+<section><h2>Funnel (30 days, production)</h2><div id="funnel"></div></section>
+<section><h2>Stats (all time)</h2><div class="grid" id="stats"></div></section>
+<section class="wide"><h2>Recent trades</h2><div id="trades"></div></section>
+<section><h2>Equity curve</h2><div id="eq"></div></section>
+<section><h2>Recent stories</h2><div id="stories"></div></section>
+<section class="wide"><h2>Live event view</h2>
+<div style="margin-bottom:6px"><input id="sym" placeholder="filter symbol" size="12"> <label class="mut"><input type="checkbox" id="auto" checked> auto-scroll</label></div>
+<div id="log"></div></section>
+</main>
+<script>
+"use strict";
+// All data goes into the DOM via textContent only (headlines are untrusted).
+const $=id=>document.getElementById(id);
+const NS="http://www.w3.org/2000/svg";
+function el(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e}
+function money(x){return x==null?"n/a":(x<0?"-":"")+"$"+Math.abs(x).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+function num(x,d=2){return x==null?"n/a":Number(x).toFixed(d)}
+function sgn(x){return x==null?"":x>0?"pos":x<0?"neg":""}
+function tile(label,value,cls){const t=el("div",null,"tile");t.append(el("span",label),el("b",value,cls));return t}
+function table(cols,rows){const t=el("table"),h=el("tr");cols.forEach(c=>h.append(el("th",c[0])));t.append(h);
+ rows.forEach(r=>{const tr=el("tr");cols.forEach(c=>{const v=c[1](r);const td=el("td",v==null?"":String(v),c[2]?c[2](r):"");tr.append(td)});t.append(tr)});return t}
+function fill(id,...kids){const n=$(id);n.replaceChildren(...kids)}
+async function get(p){const r=await fetch(p,{cache:"no-store"});if(!r.ok)throw new Error(p+" "+r.status);return r.json()}
+
+async function summary(){const s=await get("/api/summary");
+ $("ver").textContent=s.strategy_version||"";
+ const m=$("mode");m.textContent=s.execution_mode||"OBSERVE";m.className="badge "+((s.execution_mode||"")==="PAPER"?"paper":"observe");
+ const k=$("kill");k.textContent=s.kill_switch.active?"KILL SWITCH":"trading ok";k.className="badge "+(s.kill_switch.active?"killed":"ok");
+ fill("tiles",tile("Ledger equity",money(s.ledger_equity)),tile("Broker equity",money(s.broker_equity)),
+  tile("Daily P&L",money(s.daily_pnl),sgn(s.daily_pnl)),tile("Total P&L",money(s.total_pnl),sgn(s.total_pnl)));
+ $("upd").textContent="updated "+new Date().toLocaleTimeString()}
+async function positions(){const p=await get("/api/positions");
+ const cols=[["Symbol",r=>r.symbol],["Side",r=>r.side],["Qty",r=>r.qty_open],["Entry",r=>num(r.entry_price)],["Stop",r=>num(r.stop_price)],["Trail",r=>num(r.trail_price)],["MFE R",r=>num(r.mfe_r)]];
+ const kids=[];kids.push(p.production.length?table(cols,p.production):el("div","No open positions","mut"));
+ if(p.shadow.length){kids.push(el("h2","Shadow (hypothetical)"));kids.push(table(cols.concat([["Variant",r=>r.variant]]),p.shadow))}
+ fill("pos",...kids)}
+async function news(){const n=await get("/api/news_today");
+ fill("news",tile("Bullish",n.counts.BULLISH||0,"pos"),tile("Neutral",n.counts.NEUTRAL||0),tile("Bearish",n.counts.BEARISH||0,"neg"),tile("Material",n.material));
+ fill("stories",table([["ET",r=>r.time_et],["Sym",r=>r.symbol],["Headline",r=>r.headline,()=>"h"],["Dir",r=>r.direction],["Conf",r=>r.confidence==null?"":num(r.confidence)],["Catalyst",r=>r.catalyst],["Reject",r=>r.reject_reason]],n.stories))}
+async function setups(){const s=(await get("/api/setups")).setups;
+ if(!s.length){fill("setups",el("div","No armed setups","mut"));return}
+ fill("setups",table([["Symbol",r=>r.symbol],["Stage",r=>r.stage,r=>"pill"],["Variant",r=>r.variant],["Side",r=>r.side],["Conf",r=>num(r.ai_confidence)],["RVOL",r=>num(r.rvol,1)],["Impulse %",r=>num(r.impulse_pct)],["Trigger",r=>num(r.entry_trigger)],["Stop",r=>num(r.stop_price)],["Catalyst",r=>r.catalyst]],s))}
+async function funnel(){const f=(await get("/api/funnel?days=30")).production;
+ const steps=[["Stories","stories"],["Classified","classified"],["Bullish","bullish"],["Material","material"],["Conf gate","gate_passed"],["Volume","had_volume"],["Momentum","had_momentum"],["Pullback","pullback"],["Breakout","breakout_signals"],["Entries","entries"],["Closed","closed_trades"]];
+ const max=Math.max(1,...steps.map(s=>f[s[1]]));const kids=steps.map(([l,k])=>{const d=el("div",null,"bar");const b=el("i");b.style.width=(f[k]/max*100*0.6)+"%";d.append(el("span",l,"l"),b,el("span",f[k]));return d});
+ fill("funnel",...kids)}
+async function stats(){const s=(await get("/api/stats")).production.all_time;
+ const c=(l,v,cls)=>{const d=el("div");d.append(el("b",v,cls),el("span",l));return d};
+ fill("stats",c("Trades",s.n),c("Win rate",(s.win_rate*100).toFixed(1)+"%"),c("Avg win",money(s.avg_win),"pos"),c("Avg loss",money(s.avg_loss),"neg"),
+  c("Profit factor",s.profit_factor==null?"n/a":num(s.profit_factor)),c("Expectancy",money(s.expectancy_dollars)),c("Expectancy R",num(s.expectancy_r)),
+  c("Max DD",money(s.max_drawdown_dollars)),c("Sharpe",s.sharpe==null?"n/a":num(s.sharpe)))}
+async function trades(){const t=(await get("/api/trades?limit=50")).trades;
+ fill("trades",table([["Exit ET",r=>r.exit_time_et],["Sym",r=>r.symbol],["Side",r=>r.side],["Qty",r=>r.qty],["Entry",r=>num(r.entry_price)],["Exit",r=>num(r.avg_exit_price)],["P&L",r=>money(r.pnl),r=>sgn(r.pnl)],["R",r=>num(r.r_multiple),r=>sgn(r.r_multiple)],["Reason",r=>r.exit_reason],["Type",r=>r.is_shadow?"shadow:"+r.variant:"prod"]],t))}
+async function equity(){const p=(await get("/api/equity")).points.filter(x=>x.ledger_equity!=null);
+ if(p.length<2){fill("eq",el("div","Not enough snapshots yet","mut"));return}
+ const ys=p.map(x=>x.ledger_equity),lo=Math.min(...ys),hi=Math.max(...ys),sp=(hi-lo)||1;
+ const pts=ys.map((y,i)=>(i/(ys.length-1)*1000).toFixed(1)+","+(100-(y-lo)/sp*96-2).toFixed(1)).join(" ");
+ const svg=document.createElementNS(NS,"svg");svg.setAttribute("viewBox","0 0 1000 100");svg.setAttribute("preserveAspectRatio","none");
+ const pl=document.createElementNS(NS,"polyline");pl.setAttribute("points",pts);svg.append(pl);
+ fill("eq",svg,el("div",money(lo)+"  to  "+money(hi),"mut"))}
+
+let lastId=0,lastSym="";
+async function tail(){const sym=$("sym").value.trim().toUpperCase();
+ if(sym!==lastSym){lastSym=sym;lastId=0;$("log").replaceChildren()}
+ const r=(await get("/api/timeline?since_id="+lastId+(sym?"&symbol="+encodeURIComponent(sym):""))).rows;
+ if(!r.length)return;const log=$("log");
+ r.forEach(x=>{log.append(el("div",x.line));lastId=Math.max(lastId,x.id)});
+ while(log.childNodes.length>1000)log.removeChild(log.firstChild);
+ if($("auto").checked)log.scrollTop=log.scrollHeight}
+
+const jobs=[summary,positions,news,setups,funnel,stats,trades,equity,tail];
+async function tick(){await Promise.all(jobs.map(j=>j().catch(e=>{$("upd").textContent="error: "+e.message})))}
+tick();setInterval(tick,2000);
+</script></body></html>

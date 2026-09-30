@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  NewsWave daemon (launchd user agent). TEMPLATE: replace /path/to/newswave with your clone and HOME_DIR with your home directory
+  username (the PATH entry must contain the directory holding the `claude` CLI), then see
+  README "Run as a service". Nothing here loads itself: RunAtLoad is false and the agent only starts when you run
+  `launchctl bootstrap` yourself.
+  Secrets are NOT in this file: the daemon reads ALPACA_* from /path/to/newswave/.env (load_settings).
+  To trade paper orders add <string>--execute</string> after <string>run</string> (needs `python -m newswave arm`).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.newswave.daemon</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/path/to/newswave/.venv/bin/python</string>
+    <string>-m</string>
+    <string>newswave</string>
+    <string>run</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/path/to/newswave</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- ~/.local/bin holds the `claude` CLI the classifier shells out to; launchd has no shell PATH -->
+    <key>PATH</key>
+    <string>HOME_DIR/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>DATA_DIR</key>
+    <string>/path/to/newswave/data</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- restart after a crash (non-zero exit / signal); a clean SIGTERM shutdown (exit 0) stays stopped -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <!-- the directory must exist: mkdir -p /path/to/newswave/data/logs -->
+  <key>StandardOutPath</key>
+  <string>/path/to/newswave/data/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/path/to/newswave/data/logs/launchd.err.log</string>
+</dict>
+</plist>

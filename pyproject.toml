@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "newswave"
+version = "1.0.0"
+description = "News-driven momentum paper-trading bot (Alpaca paper only)"
+requires-python = ">=3.12"
+dependencies = ["alpaca-py", "websockets", "python-dotenv", "tzdata"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools.packages.find]
+include = ["newswave*"]
+
+[tool.setuptools.package-data]
+"newswave.dashboard" = ["*.html"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
