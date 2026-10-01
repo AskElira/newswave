@@ -1,5 +1,9 @@
 # NewsWave
 
+[![Watch the video: I directed 15 AI agents to build a trading bot in one day](https://img.youtube.com/vi/XHyMDYVCp9Y/maxresdefault.jpg)](https://youtu.be/XHyMDYVCp9Y)
+
+**[Watch the video](https://youtu.be/XHyMDYVCp9Y)** to see how NewsWave was built. The exact prompts are in [`prompts/`](prompts/).
+
 A news-momentum paper-trading bot where Claude only classifies the news and deterministic Python makes every trading decision.
 
 Story: https://jellycharts.com/newswave
